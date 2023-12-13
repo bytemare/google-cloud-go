@@ -61,6 +61,14 @@ func floatProto(n float64) *proto3.Value {
 	return &proto3.Value{Kind: &proto3.Value_NumberValue{NumberValue: n}}
 }
 
+func float32Proto(n float32) *proto3.Value {
+	return &proto3.Value{Kind: &proto3.Value_NumberValue{NumberValue: float64(n)}}
+}
+
+func float32Type() *sppb.Type {
+	return &sppb.Type{Code: sppb.TypeCode_FLOAT32}
+}
+
 func floatType() *sppb.Type {
 	return &sppb.Type{Code: sppb.TypeCode_FLOAT64}
 }

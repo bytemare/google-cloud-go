@@ -64,6 +64,11 @@ var (
 			{Name: "NULL_FLOAT64", Type: floatType()},
 			{Name: "FLOAT64_ARRAY", Type: listType(floatType())},
 			{Name: "NULL_FLOAT64_ARRAY", Type: listType(floatType())},
+			// FLOAT32 / FLOAT32 ARRAY
+			{Name: "FLOAT32", Type: float32Type()},
+			{Name: "NULL_FLOAT32", Type: float32Type()},
+			{Name: "FLOAT32_ARRAY", Type: listType(float32Type())},
+			{Name: "NULL_FLOAT32_ARRAY", Type: listType(float32Type())},
 			// TIMESTAMP / TIMESTAMP ARRAY
 			{Name: "TIMESTAMP", Type: timeType()},
 			{Name: "NULL_TIMESTAMP", Type: timeType()},
@@ -82,7 +87,8 @@ var (
 					structType(
 						mkField("Col1", intType()),
 						mkField("Col2", floatType()),
-						mkField("Col3", stringType()),
+						mkField("Col3", float32Type()),
+						mkField("Col4", stringType()),
 					),
 				),
 			},
@@ -92,7 +98,8 @@ var (
 					structType(
 						mkField("Col1", intType()),
 						mkField("Col2", floatType()),
-						mkField("Col3", stringType()),
+						mkField("Col3", float32Type()),
+						mkField("Col4", stringType()),
 					),
 				),
 			},
@@ -123,6 +130,11 @@ var (
 			nullProto(),
 			listProto(nullProto(), nullProto(), floatProto(1.7)),
 			nullProto(),
+			// FLOAT32 / FLOAT32 ARRAY
+			float32Proto(0.3),
+			nullProto(),
+			listProto(nullProto(), nullProto(), float32Proto(0.3)),
+			nullProto(),
 			// TIMESTAMP / TIMESTAMP ARRAY
 			timeProto(tm),
 			nullProto(),
@@ -136,7 +148,7 @@ var (
 			// STRUCT ARRAY
 			listProto(
 				nullProto(),
-				listProto(intProto(3), floatProto(33.3), stringProto("three")),
+				listProto(intProto(3), floatProto(33.3), float32Proto(0.3), stringProto("three")),
 				nullProto(),
 			),
 			nullProto(),
@@ -175,6 +187,11 @@ func TestColumnValues(t *testing.T) {
 		{NullFloat64{}},
 		{[]NullFloat64{{}, {}, {1.7, true}}},
 		{[]NullFloat64(nil)},
+		// FLOAT32 / FLOAT64 ARRAY
+		{float32(0.3), NullFloat32{0.3, true}},
+		{NullFloat32{}},
+		{[]NullFloat32{{}, {}, {float32(0.3), true}}},
+		{[]NullFloat32(nil)},
 		// TIMESTAMP / TIMESTAMP ARRAY
 		{tm, NullTime{tm, true}},
 		{NullTime{}},
@@ -190,13 +207,15 @@ func TestColumnValues(t *testing.T) {
 			[]*struct {
 				Col1 NullInt64
 				Col2 NullFloat64
-				Col3 string
+				Col3 NullFloat32
+				Col4 string
 			}{
 				nil,
 
 				{
 					NullInt64{3, true},
 					NullFloat64{33.3, true},
+					NullFloat32{0.3, true},
 					"three",
 				},
 				nil,
@@ -208,11 +227,13 @@ func TestColumnValues(t *testing.T) {
 						fields: []*sppb.StructType_Field{
 							mkField("Col1", intType()),
 							mkField("Col2", floatType()),
-							mkField("Col3", stringType()),
+							mkField("Col3", float32Type()),
+							mkField("Col4", stringType()),
 						},
 						vals: []*proto3.Value{
 							intProto(3),
 							floatProto(33.3),
+							float32Proto(0.3),
 							stringProto("three"),
 						},
 					},
@@ -225,7 +246,8 @@ func TestColumnValues(t *testing.T) {
 			[]*struct {
 				Col1 NullInt64
 				Col2 NullFloat64
-				Col3 string
+				Col3 NullFloat32
+				Col4 string
 			}(nil),
 			[]NullRow(nil),
 		},
@@ -309,32 +331,37 @@ func TestNilDst(t *testing.T) {
 							structType(
 								mkField("Col1", intType()),
 								mkField("Col2", floatType()),
+								mkField("Col3", float32Type()),
 							),
 						),
 					},
 				},
 				[]*proto3.Value{listProto(
-					listProto(intProto(3), floatProto(33.3)),
+					listProto(intProto(3), floatProto(33.3), float32Proto(0.3)),
 				)},
 			},
 			(*[]*struct {
 				Col1 int
 				Col2 float64
+				Col3 float32
 			})(nil),
 			errDecodeColumn(0, errNilDst((*[]*struct {
 				Col1 int
 				Col2 float64
+				Col3 float32
 			})(nil))),
 			(*struct {
 				StructArray []*struct {
 					Col1 int
 					Col2 float64
+					Col3 float32
 				} `spanner:"STRUCT_ARRAY"`
 			})(nil),
 			errNilDst((*struct {
 				StructArray []*struct {
 					Col1 int
 					Col2 float64
+					Col3 float32
 				} `spanner:"STRUCT_ARRAY"`
 			})(nil)),
 		},
@@ -396,6 +423,10 @@ func TestNullTypeErr(t *testing.T) {
 		{
 			"NULL_FLOAT64",
 			proto.Float64(0.0),
+		},
+		{
+			"NULL_FLOAT32",
+			proto.Float32(0.0),
 		},
 		{
 			"NULL_TIMESTAMP",
@@ -854,6 +885,50 @@ func TestBrokenRow(t *testing.T) {
 			},
 			proto.Float64(0),
 			errDecodeColumn(0, errUnexpectedFloat64Str("nan")),
+		},
+		{
+			// Field specifies FLOAT32 type, value is having a nil Kind.
+			&Row{
+				[]*sppb.StructType_Field{
+					{Name: "Col0", Type: float32Type()},
+				},
+				[]*proto3.Value{{Kind: (*proto3.Value_NumberValue)(nil)}},
+			},
+			&NullFloat32{1.0, true},
+			errDecodeColumn(0, errSrcVal(&proto3.Value{Kind: (*proto3.Value_NumberValue)(nil)}, "Number")),
+		},
+		{
+			// Field specifies FLOAT32 type, but value is for BOOL type.
+			&Row{
+				[]*sppb.StructType_Field{
+					{Name: "Col0", Type: float32Type()},
+				},
+				[]*proto3.Value{boolProto(true)},
+			},
+			&NullFloat32{1.0, true},
+			errDecodeColumn(0, errSrcVal(boolProto(true), "Number")),
+		},
+		{
+			// Field specifies FLOAT32 type, but value is wrongly encoded.
+			&Row{
+				[]*sppb.StructType_Field{
+					{Name: "Col0", Type: float32Type()},
+				},
+				[]*proto3.Value{stringProto("nan")},
+			},
+			&NullFloat32{},
+			errDecodeColumn(0, errUnexpectedFloat32Str("nan")),
+		},
+		{
+			// Field specifies FLOAT32 type, but value is wrongly encoded.
+			&Row{
+				[]*sppb.StructType_Field{
+					{Name: "Col0", Type: float32Type()},
+				},
+				[]*proto3.Value{stringProto("nan")},
+			},
+			proto.Float32(0),
+			errDecodeColumn(0, errUnexpectedFloat32Str("nan")),
 		},
 		{
 			// Field specifies BYTES type, value is having a nil Kind.
@@ -1529,6 +1604,11 @@ func TestToStruct(t *testing.T) {
 			NullFloat64      NullFloat64   `spanner:"NULL_FLOAT64"`
 			Float64Array     []NullFloat64 `spanner:"FLOAT64_ARRAY"`
 			NullFloat64Array []NullFloat64 `spanner:"NULL_FLOAT64_ARRAY"`
+			// FLOAT32 / FLOAT32 ARRAY
+			Float32          float32       `spanner:"FLOAT32"`
+			NullFloat32      NullFloat32   `spanner:"NULL_FLOAT32"`
+			Float32Array     []NullFloat32 `spanner:"FLOAT32_ARRAY"`
+			NullFloat32Array []NullFloat32 `spanner:"NULL_FLOAT32_ARRAY"`
 			// TIMESTAMP / TIMESTAMP ARRAY
 			Timestamp          time.Time  `spanner:"TIMESTAMP"`
 			NullTimestamp      NullTime   `spanner:"NULL_TIMESTAMP"`
@@ -1544,12 +1624,14 @@ func TestToStruct(t *testing.T) {
 			StructArray []*struct {
 				Col1 int64
 				Col2 float64
-				Col3 string
+				Col3 float32
+				Col4 string
 			} `spanner:"STRUCT_ARRAY"`
 			NullStructArray []*struct {
 				Col1 int64
 				Col2 float64
-				Col3 string
+				Col3 float32
+				Col4 string
 			} `spanner:"NULL_STRUCT_ARRAY"`
 		}{
 			{}, // got
@@ -1579,6 +1661,11 @@ func TestToStruct(t *testing.T) {
 				NullFloat64{},
 				[]NullFloat64{{}, {}, {1.7, true}},
 				[]NullFloat64(nil),
+				// FLOAT32 / FLOAT32 ARRAY
+				float32(0.3),
+				NullFloat32{},
+				[]NullFloat32{{}, {}, {float32(0.3), true}},
+				[]NullFloat32(nil),
 				// TIMESTAMP / TIMESTAMP ARRAY
 				tm,
 				NullTime{},
@@ -1593,17 +1680,19 @@ func TestToStruct(t *testing.T) {
 				[]*struct {
 					Col1 int64
 					Col2 float64
-					Col3 string
+					Col3 float32
+					Col4 string
 				}{
 					nil,
 
-					{3, 33.3, "three"},
+					{3, 33.3, float32(0.3), "three"},
 					nil,
 				},
 				[]*struct {
 					Col1 int64
 					Col2 float64
-					Col3 string
+					Col3 float32
+					Col4 string
 				}(nil),
 			}, // want
 		}
