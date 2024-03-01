@@ -1,5 +1,12 @@
 # Changes
 
+## [1.9.1](https://github.com/googleapis/google-cloud-go/compare/logging/v1.9.0...logging/v1.9.1) (2024-03-01)
+
+
+### Bug Fixes
+
+* **logging:** Enable universe domain resolution options ([fd1d569](https://github.com/googleapis/google-cloud-go/commit/fd1d56930fa8a747be35a224611f4797b8aeb698))
+
 ## [1.9.0](https://github.com/googleapis/google-cloud-go/compare/logging/v1.8.1...logging/v1.9.0) (2023-12-12)
 
 
@@ -153,4 +160,3 @@
 
 This is the first tag to carve out logging as its own module. See:
 https://github.com/golang/go/wiki/Modules#is-it-possible-to-add-a-module-to-a-multi-module-repository.
-
